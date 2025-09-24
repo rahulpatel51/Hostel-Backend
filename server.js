@@ -16,6 +16,7 @@ import noticeRoutes from "./Routes/NoticeRoutes.js";
 import messRoutes from "./Routes/MenuRoutes.js";
 import roomAllocationRoutes from "./Routes/roomAllocationRoutes.js";
 
+// Load environment variables
 dotenv.config();
 
 // Setup __dirname for ES modules
@@ -25,25 +26,45 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware
+// --------------------- CORS ---------------------
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "https://hostel-admin-frontend.vercel.app"
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (curl, mobile apps, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    console.log("Blocked by CORS:", origin);
+    callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+}));
+
+// --------------------- Middleware ---------------------
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-app.use(
-  cors({
-    origin: [
-      process.env.CLIENT_URL || "http://localhost:3000", 
-      "http://localhost:3001" || "https://hostel-admin-frontend.vercel.app", 
-    ],
-    credentials: true,
-  })
-);
 app.use(cookieParser());
 
-// Serve static files (e.g., uploaded images)
+// Handle pre-flight OPTIONS requests globally
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
+// Serve uploaded files
 app.use("/uploads", express.static(join(__dirname, "uploads")));
 
-// API Routes
-app.use("/api/auth", authRoutes); 
+// --------------------- Routes ---------------------
+app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/student", studentRoutes);
 app.use("/api/warden", wardenRoutes);
@@ -57,28 +78,44 @@ app.get("/", (req, res) => {
   res.send("🏨 Hostel Management System API is running...");
 });
 
-// Global Error Handler
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "OK",
+    message: "Server is running",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// --------------------- Global Error Handler ---------------------
 app.use((err, req, res, next) => {
+  if (err.message === "Not allowed by CORS") {
+    return res.status(403).json({
+      success: false,
+      message: "CORS policy blocked the request"
+    });
+  }
+
+  console.error(err); // Log error for debugging
+
   const statusCode = err.statusCode || 500;
   const message = err.message || "Something went wrong!";
   res.status(statusCode).json({
     success: false,
     statusCode,
-    message,
+    message
   });
 });
 
-// Database Connection & Server Start
-mongoose
-  .connect(process.env.MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+// --------------------- DB Connection ---------------------
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
   .then(() => {
     console.log("✅ Connected to MongoDB");
-    app.listen(PORT, () =>
-      console.log(`🚀 Server running at http://localhost:${PORT}`)
-    );
+    console.log("🌐 Allowed Origins:", allowedOrigins);
+    app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
   })
   .catch((err) => {
     console.error("❌ MongoDB Connection Error:", err.message);
