@@ -31,7 +31,8 @@ const allowedOrigins = [
   process.env.CLIENT_URL,
   "http://localhost:3000",
   "http://localhost:3001",
-  "https://hostel-admin-frontend.vercel.app"
+  "https://hostel-admin-frontend.vercel.app",
+  "https://hostel-booking-frontend-phi.vercel.app"
 ].filter(Boolean);
 
 app.use(cors({
